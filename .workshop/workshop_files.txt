@@ -1,7 +1,0 @@
-config.json
-Support/Commands.txt
-Commands.txt
-README.md
-config.rex
-Support/Gulp-Commands.txt
-Support/Rexx-Commands.txt

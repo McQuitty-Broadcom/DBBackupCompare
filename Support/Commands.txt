@@ -14,7 +14,7 @@ gulp setupProfiles
 #
 zowe profiles list zosmf
 zowe zosmf check status
-zowe files list ds "MAINFRAME_USER.MARBLES.*"
+zowe files list ds "CUST018.MARBLES.*"
 
 #
 # Validate Endevor Profile
@@ -34,18 +34,18 @@ zowe db2 execute sql -q "SELECT * FROM EVENT.MARBLE"
 #
 # Update Endevor Elements
 #
-zowe endevor ret element MARBLE_NUM --type COBOL --tf MARBLE_NUM.cbl --os
+zowe endevor ret element MARBLE18 --type COBOL --tf MARBLE18.cbl --os
 
 #
 # Edit the code in Che, then update it
 #
-zowe endevor update element MARBLE_NUM --type COBOL --ff MARBLE_NUM.cbl --os
+zowe endevor update element MARBLE18 --type COBOL --ff MARBLE18.cbl --os
 
 #
 # Generate the Elements manually
 #
-zowe endevor generate element MARBLE_NUM --type COBOL --os
-zowe endevor generate element MARBLE_NUM --type LNK --os
+zowe endevor generate element MARBLE18 --type COBOL --os
+zowe endevor generate element MARBLE18 --type LNK --os
 
 #
 # Start Using Gulp.
@@ -68,7 +68,7 @@ gulp deploy
 #
 # Manually verify
 #
-zowe console issue command "F CICS_REGION,MARBLE_CICS CRE COLOR 1 2" --cn MAINFRAME_USER
+zowe console issue command "F CICSTRN1,MB18 CRE COLOR 1 2" --cn CUST018
 zowe db2 execute sql -q "SELECT * FROM EVENT.MARBLE"
 
 # 
@@ -85,13 +85,13 @@ npm test
 zowe files list am "PRODUCT.NDVR.MARBLES.MARBLES.D1.LOADLIB"
 zowe files list am "PRODUCT.NDVR.MARBLES.MARBLES.D1.DBRMLIB"
 # Copy LoadLib and DBRM Lib
-zowe jobs submit ds "MAINFRAME_USER.MARBLES.JCL(MARBCOPY)"  --vasc
+zowe jobs submit ds "CUST018.MARBLES.JCL(MARBCOPY)"  --vasc
 # Bind and Grant
-zowe jobs submit ds "MAINFRAME_USER.MARBLES.JCL(MARBIND)" --vasc
+zowe jobs submit ds "CUST018.MARBLES.JCL(MARBIND)" --vasc
 # CICS Refresh
-zowe cics refresh program MARBLE_NUM
+zowe cics refresh program MARBLE18
 # Execute CICS program
-zowe console issue command "F CICS_REGION,MARBLE_CICS CRE COLOR 1 1" --cn MAINFRAME_USER
+zowe console issue command "F CICSTRN1,MB18 CRE COLOR 1 1" --cn CUST018
 # Check DB
 zowe db2 execute sql -q "select * from EVENT.MARBLE"
 
