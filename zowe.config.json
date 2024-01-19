@@ -11,36 +11,38 @@
         "tso": {
             "type": "tso",
             "properties": {
-                "account": "",
                 "codePage": "1047",
-                "logonProcedure": "IZUFPROC"
-            },
-            "secure": []
+                "logonProcedure": "IZUFPROC",
+                "account": "124400000"
+            }
         },
         "ssh": {
             "type": "ssh",
             "properties": {
                 "port": 2022
-            },
-            "secure": []
+            }
         },
         "db2": {
             "type": "db2",
-            "properties": {},
-            "secure": []
+            "properties": {
+                "port": 6017,
+                "database": "D10CPTIB"
+            }
         },
         "cics": {
             "type": "cics",
-            "properties": {},
-            "secure": []
+            "properties": {
+                "port": 6000,
+                "protocol": "https",
+                "regionName": "CICSTRN1"
+            }
         },
         "endevor": {
             "type": "endevor",
             "properties": {
-                "port": 6002,
-                "protocol": "http"
-            },
-            "secure": []
+                "port": 6032,
+                "protocol": "https"
+            }
         },
         "endevor-location": {
             "type": "endevor-location",
@@ -57,23 +59,27 @@
         },
         "fmp": {
             "type": "fmp",
-            "properties": {},
-            "secure": []
+            "properties": {
+                "port": 6005,
+                "protocol": "https"
+            }
         },
         "ops": {
             "type": "ops",
-            "properties": {},
-            "secure": []
+            "properties": {
+                "port": "6007",
+                "protocol": "https"
+            }
         },
         "base": {
             "type": "base",
             "properties": {
                 "host": "10.1.2.73",
                 "rejectUnauthorized": false,
-                "user": "cust016",
-                "password": "cust016"
+                "user": "cust018",
+                "password": "cust018"
             },
-            "secure" : []
+            "secure": []
         },
         "ebg": {
             "type": "ebg",
@@ -92,61 +98,11 @@
                 "comment": "JENKINS"
             }
         },
-        "tso": {
-            "type": "tso",
-            "properties": {
-                "codePage": "1047",
-                "logonProcedure": "IZUFPROC",
-                "account": "124400000"
-            }
-        },
-        "ssh": {
-            "type": "ssh",
-            "properties": {
-                "port": 22
-            }
-        },
-        "cics": {
-            "type": "cics",
-            "properties": {
-                "port": 6000,
-                "protocol": "https",
-                "regionName": "CICSTRN1"
-            }
-        },
-        "db2": {
-            "type": "db2",
-            "properties": {
-                "port": 6017,
-                "database": "D10CPTIB"
-            }
-        },
-        "endevor": {
-            "type": "endevor",
-            "properties": {
-                "port": 6032,
-                "protocol": "https"
-            }
-        },
-        "fmp": {
-            "type": "fmp",
-            "properties": {
-                "port": 6005,
-                "protocol": "https"
-            }
-        },
         "jclcheck": {
             "type": "jclcheck",
             "properties": {
                 "port": "6028",
                 "jclcheckOptions": "NOAS NOAU NOHCD NOJCL NORES NOSIGN",
-                "protocol": "https"
-            }
-        },
-        "ops": {
-            "type": "ops",
-            "properties": {
-                "port": "6007",
                 "protocol": "https"
             }
         }

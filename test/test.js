@@ -25,42 +25,15 @@ var config = require('../config.json');
  */
 
 /**
-* Polls jobId. Callback is made without error if Job completes with CC 0000 in the allotted time
-* @param {string}           jobId     jobId to check the completion of
-* @param {awaitJobCallback} callback  function to call after completion
-* @param {number}           tries     max attempts to check the completion of the job
-* @param {number}           wait      wait time in ms between each check
-*/
-function awaitJobCompletion(jobId, callback, tries = 30, wait = 1000) {
-  if (tries > 0) {
-      sleep(wait);
-      cmd.get(
-      `zowe jobs view job-status-by-jobid ${jobId} --rff retcode --rft string`,
-      function (err, data, stderr) {
-          retcode = data.trim();
-          if (retcode == "CC 0000") {
-            callback(null);
-          } else if (retcode == "null") {
-            awaitJobCompletion(jobId, callback, tries - 1, wait);
-          } else {
-            callback(new Error(jobId + " had a return code of " + retcode));
-          }
-      }
-      );
-  } else {
-      callback(new Error(jobId + " timed out."));
-  }
-}
-
-/**
 * Creates a Marble with an initial quantity
 * @param {string}           color        color of Marble to create
 * @param {number}           [quantity=1] quantity of Marbles to initially create
+* @param {number}           [cost=1]     cost of Marbles to initially create
 * @param {nodeCmdCallback}  [callback]   function to call after completion, callback(err, data, stderr)
 */
-function createMarble(color, quantity=1, callback) {
+function createMarble(color, quantity=1, cost=1, callback) {
   cmd.get(
-    `zowe console issue command "F ${config.cicsRegion},${config.cicsTran} CRE ${color} ${quantity}" --cn ${config.cicsConsole}`,
+    `zowe console issue command "F ${config.cicsRegion},${config.cicsTran} CRE ${color} ${quantity} ${cost}" --cn ${config.cicsConsole}`,
     function (err, data, stderr) {
       typeof callback === 'function' && callback(err, data, stderr);
     }
@@ -90,7 +63,7 @@ function deleteMarble(color, callback) {
 function getMarbleQuantity(color, callback) {
   // Submit job, await completion
   cmd.get(
-    `zowe jobs submit data-set "${config.db2QueryJCL}" --rff jobid --rft string`,
+    `zowe jobs submit data-set "${config.db2QueryJCL}" --rff jobid --rft string --wfo`,
     function (err, data, stderr) {
       if(err){
         throw err
@@ -99,32 +72,27 @@ function getMarbleQuantity(color, callback) {
         var jobId = data.trim();
 
         // Await the jobs completion
-        awaitJobCompletion(jobId, function(err){
-          if(err){
-            throw err
-          } else {
-            cmd.get(
-              `zowe jobs view sfbi ${jobId} 104`,
-              function (err, data, stderr) {
-                if(err){
-                  callback(err);
-                } else {
-                  var pattern = new RegExp(".*\\| " + color + " .*\\|.*\\|.*\\|","g");
-                  var found = data.match(pattern);
-                  if(!found){
-                    callback(err, null, null);
-                  } else { //found
-                    //found should look like nn_| COLOR       |       QUANTITY |        COST |
-                    var row = found[0].split("|"),
-                        quantity = Number(row[2]);
+        cmd.get(
+          `zowe jobs view sfbi ${jobId} 104`,
+          function (err, data, stderr) {
+            if(err){
+              callback(err);
+            } else {
+              var pattern = new RegExp(".*\\| " + color + " .*\\|.*\\|.*\\|","g");
+              var found = data.match(pattern);
+              if(!found){
+                callback(err, null, null);
+              } else { //found
+                //found should look like nn_| COLOR       |       QUANTITY |        COST |
+                var row = found[0].split("|"),
+                    quantity = Number(row[2]),
+                    cost = Number(row[3]);
 
-                    callback(err, quantity);
-                  }
-                }
+                callback(err, quantity, cost);
               }
-            );
+            }
           }
-        });
+        );
       }
     }
   );
@@ -181,6 +149,8 @@ describe('Marbles', function () {
    */
   describe('Inventory Manipulation', function () {
     const COLOR = config.marbleColor;
+    const QTY = 18;
+    const COST = 4;
 
     // Delete the marble to reset inventory to zero (Delete will be tested later)
     before(function(done){
@@ -189,9 +159,9 @@ describe('Marbles', function () {
       })
     });
 
-    it.only('should create a single marble', function (done) {
+    it(`should create ${QTY} marbles with a cost of ${COST}`, function (done) {
       // Create marble
-      createMarble(COLOR, 1, function(err, data, stderr){
+      createMarble(COLOR, QTY, COST, function(err, data, stderr){
         if(err){
           throw err;
         } else if (stderr){
@@ -201,11 +171,12 @@ describe('Marbles', function () {
           data = data.trim();
           assert.equal(data, "+SUCCESS", "Unsuccessful marble creation");
 
-          getMarbleQuantity(COLOR, function(err, quantity){
+          getMarbleQuantity(COLOR, function(err, quantity, cost){
             if(err){
               throw err;
             }
-            assert.equal(quantity, 1, "Inventory is not as expected");
+            assert.equal(quantity, QTY, "Inventory is not as expected");
+            assert.equal(cost, COST, "Cost is not as expected.")
             done();
           });
         }
@@ -214,7 +185,7 @@ describe('Marbles', function () {
 
     it('should not create a marble of a color that already exists', function (done) {
       // Create marble
-      createMarble(COLOR, 2, function(err, data, stderr){
+      createMarble(COLOR, 2, 1, function(err, data, stderr){
         if(err){
           throw err
         } else if (stderr){
@@ -229,7 +200,7 @@ describe('Marbles', function () {
             if(err){
               throw err;
             }
-            assert.equal(quantity, 1, "Inventory is not as expected");
+          assert.equal(quantity, QTY, "Inventory is not as expected");
             done();
           });
         }

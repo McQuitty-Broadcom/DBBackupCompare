@@ -1,3 +1,5 @@
+const { getDefaultAutoSelectFamilyAttemptTimeout } = require('net');
+
 var cmd = require('node-cmd'),
     config = require('./config.json'),
     fs = require('fs'),
@@ -14,74 +16,13 @@ var cmd = require('node-cmd'),
  * @param {Error} err 
  */
 
+
 /**
   * commandObject - object contains command to submit and directory to download output to
   * @object commandObject
   * @param {string} command Command to submit
   * @param {string} dir     Directory to download command output to 
   */
-
- /**
-* Creates zw (Zowe-Workshop) profiles for project and sets them as default
-* @param {string}           host     z/OS host the project is running against
-* @param {string}           user     username
-* @param {string}           pass     password
-* @param {awaitJobCallback} callback function to call after completion
-*/
-function createAndSetProfiles(host, user, pass, callback){
-  var commands = [
-    {
-      command: `zowe profiles create zosmf zw --host ${host} --user ${user} --pass ${pass}` +
-         ` --port ${config.zosmfPort} --ru ${config.zosmfRejectUnauthorized} --ow`,
-      dir: "command-archive/create-zosmf-profile"
-    },
-    {
-      command: "zowe profiles set zosmf zw",
-      dir: "command-archive/set-zosmf-profile"
-    },
-    {
-      command: `zowe profiles create endevor zw --host ${host} --user ${user}  --pass ${pass}` +
-               ` --port ${config.endevorPort} --ru ${config.endevorRejectUnauthorized}` + 
-               ` --protocol  ${config.endevorProtocol} --ow`,
-      dir: "command-archive/create-endevor-profile"
-    },
-    {
-      command: "zowe profiles set endevor zw",
-      dir: "command-archive/set-endevor-profile"
-    },
-    {
-      command: `zowe profiles create endevor-location zw --instance ${config.endevorInstance}` +
-               ` --environment ${config.endevorEnvironment} --system ${config.endevorSystem}` +
-               ` --subsystem ${config.endevorSubsystem} --ccid ${user}` + 
-               ` --maxrc 0 --stage-number 1 --comment ${user} --ow`,
-      dir: "command-archive/create-endevor-location-profile"
-    },
-    {
-      command: "zowe profiles set endevor-location zw",
-      dir: "command-archive/set-endevor-location-profile"
-    },
-    {
-      command: `zowe profiles create cics zw --host  ${host} --user ${user} --password ${pass}` +
-               ` --port ${config.cicsPort} --region-name ${config.cicsRegion}` +
-               ` --protocol ${config.cicsProtocol} --ru ${config.cicsRejectUnauthorized} --ow`,
-      dir: "command-archive/create-cics-profile"
-    },
-    {
-      command: "zowe profiles set cics zw",
-      dir: "command-archive/set-cics-profile"
-    },
-    {
-      command: `zowe profiles create db2 zw --host ${host} --user ${user} --pass ${pass}` +
-               ` --port ${config.db2Port} --database ${config.db2Database} --ow`,
-      dir: "command-archive/create-db2-profile"
-    },
-    {
-      command: "zowe profiles set db2 zw",
-      dir: "command-archive/set-db2-profile"
-    }
-  ];
-  submitMultipleSimpleCommands(commands, callback);
-}
 
 /**
 * Runs command and calls back without error if successful
@@ -108,6 +49,19 @@ function simpleCommand(command, dir, callback, expectedOutputs){
   });
 }
 
+function downloadDb(jobid, dbtype, callback)
+{
+  var command = `zowe jobs view sfbi ${jobid} 104`;
+  cmd.get(command, function(err, data, stderr) {
+    if(err){
+      callback(err);
+    } else if (stderr){
+      callback(new Error("\nCommand:\n" + command + "\n" + stderr + "Stack Trace:"));
+    } else {
+      writeDBToFile(dbtype, "dboutput", data);
+    }
+  });
+} 
 /**
 * Submits job, verifies successful completion, stores output
 * @param {string}           ds                  data-set to submit
@@ -115,7 +69,7 @@ function simpleCommand(command, dir, callback, expectedOutputs){
 * @param {number}           [maxRC=0]           maximum allowable return code
 * @param {awaitJobCallback} callback            function to call after completion
 */
-function submitJobAndDownloadOutput(ds, dir="job-archive", maxRC=0, callback){
+function submitJobAndDownloadOutput(ds, dir="job-archive", maxRC=0, dbtype, callback){
   var command = `zowe jobs submit data-set "${ds}" -d ${dir} --rfj`;
   cmd.get(command, function(err, data, stderr) { 
     //log output
@@ -132,6 +86,9 @@ function submitJobAndDownloadOutput(ds, dir="job-archive", maxRC=0, callback){
 
       //retcode should be in the form CC nnnn where nnnn is the return code
       if (retcode.split(" ")[1] <= maxRC) {
+        if (dbtype !== "") {
+          downloadDb(data.jobid, dbtype)
+        }
         callback(null);
       } else {
         callback(new Error("Job did not complete successfully. Additional diagnostics:" + JSON.stringify(data,null,1)));
@@ -140,24 +97,15 @@ function submitJobAndDownloadOutput(ds, dir="job-archive", maxRC=0, callback){
   });
 }
 
-/**
-* Submits multiple simple commands
-* @param {commandObject[]}  commands Array of commandObjects
-* @param {awaitJobCallback} callback function to call after completion
-*/
-function submitMultipleSimpleCommands(commands, callback){
-  if(commands.length>0){
-    simpleCommand(commands[0].command, commands[0].dir, function(err){
-      if(err){
-        callback(err);
-      } else {
-        commands.shift();
-        submitMultipleSimpleCommands(commands, callback);
-      }
-    })
-  } else {
-    callback();
-  }
+function compareOutputs(callback) {
+  cmd.get('diff "backup/dboutput" "update/dboutput"', function(err, data, stderr) {
+  if (stderr) {
+      callback(new Error("Could not compare datasets"));
+    } else {
+      console.log(data);
+      callback();
+    }
+  });
 }
 
 /**
@@ -174,6 +122,21 @@ function verifyOutput(data, expectedOutputs, callback){
   });
   // Success
   callback();
+}
+
+function writeDBToFile(dir, fileName, content) {
+  // Adjusted to account for Windows filename issues with : in the name.
+  var filePath = dir + "/" + fileName;
+
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  };
+  
+  fs.writeFileSync(filePath, content, function(err) {
+    if(err) {
+      return console.log(err);
+    }
+  });
 }
 
 /**
@@ -198,32 +161,39 @@ function writeToFile(dir, content) {
   });
 }
 
-gulp.task('bind-n-grant', 'Bind & Grant Job', function (callback) {
-  var ds = config.bindGrantJCL;
-  submitJobAndDownloadOutput(ds, "job-archive/bind-n-grant", 4, callback);
+gulp.task('db2-backup', 'Backup DB', function (callback) {
+  var ds = config.db2QueryJCL;
+  submitJobAndDownloadOutput(ds, "jobs/backup-db", 0, "backup", callback);
 });
 
-gulp.task('build-cobol', 'Build COBOL element', function (callback) {
-  var command = `zowe endevor generate element ${config.testElement} --type COBOL --override-signout --maxrc 0 --stage-number 1`;
-
-  simpleCommand(command, "command-archive/build-cobol", callback);
+gulp.task('db2-load', "Load DB2 Table", function(callback) {
+  submitJobAndDownloadOutput(config.db2LoadJCL, 'jobs/update-ds', 0, "", callback);
 });
 
-gulp.task('cics-refresh', 'Refresh(new-copy) ' + config.cicsProgram + ' CICS Program', function (callback) {
-  var command = `zowe cics refresh program "${config.cicsProgram}"`;
-
-  simpleCommand(command, "command-archive/cics-refresh", callback);
+gulp.task('db2-after', "DB2 After State", function(callback) {
+  submitJobAndDownloadOutput(config.db2QueryJCL, "jobs/db2-query", 0, "update", callback);
 });
 
-gulp.task('copy', 'Copy LOADLIB & DBRMLIB to test environment', function (callback) {
-  var ds = config.copyJCL;
-  submitJobAndDownloadOutput(ds, "job-archive/copy", 4, callback);
+gulp.task('db2-reset', "Reset DB2 Table", function(callback) {
+  submitJobAndDownloadOutput(config.db2ResetJCL, 'update', 0, "reset", callback);
 });
 
-gulp.task('setupProfiles', 'Create project profiles and set them as default', function (callback) {
-  var host, user, pass;
-  host = readlineSync.question('Host name or IP address: ');
-  user = readlineSync.question('Username: ');
-  pass = readlineSync.question('Password: ', { hideEchoBack: true });
-  createAndSetProfiles(host, user, pass, callback);
+gulp.task('clean-backup', 'Cleanup Output', function(callback) {
+  simpleCommand('rm -rf backup', "command-archive/clean1", callback);
 });
+
+gulp.task('clean-jobs', 'Cleanup Output', function(callback) {
+  simpleCommand('rm -rf job*', "command-archive/clean2", callback);
+});
+
+gulp.task('clean-update', 'Cleanup Output', function(callback) {
+  simpleCommand('rm -rf update*', "command-archive/clean2", callback);
+});
+
+gulp.task('compare', 'Compare Before and After', function(callback) {
+  compareOutputs(callback);
+});
+
+gulp.task('clean', 'Cleanup', gulpSequence('clean-backup', 'clean-jobs', 'clean-update'));
+gulp.task('update', 'Update Database and DL', gulpSequence('db2-load', 'db2-after'));
+gulp.task('all', 'Backup, Update and DL', gulpSequence('db2-backup', 'update'));
